@@ -67,9 +67,11 @@ func addLinkPage(w http.ResponseWriter, r *http.Request) {
 
 	Collection := session.DB("urls").C("urls")
 
+	slug := RandomString(12)
+
 	url := &Url{
 		Url: r.FormValue("url"),
-		Slug: RandomString(12),
+		Slug: slug,
 		Clicks: 0,
 	}
 
@@ -78,7 +80,9 @@ func addLinkPage(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	addPageTemplate.Execute(w, "Your link is: http://localhost/l/" + r.FormValue("url"))
+	shortUrl := "http://localhost:8080/l/" + slug
+
+	addPageTemplate.Execute(w, "Your link is: " + shortUrl)
 }
 
 const addLinkPageContent = `
@@ -131,10 +135,14 @@ func redirectToUrl(w http.ResponseWriter, r *http.Request) {
 
 	Collection.Find(bson.M{"slug": slug}).One(&result)
 
-	fmt.Println(slug)
-
 	if result.Url != "" {
+
+		result.Clicks++
+		change := bson.M{"$set": bson.M{"clicks": result.Clicks}}
+		err = Collection.Update(bson.M{"slug": result.Slug}, change)
+
 		http.Redirect(w, r, result.Url, 301)
+
 	} else {
 		errorPageTemplate.Execute(w, "URL not found!")
 	}
