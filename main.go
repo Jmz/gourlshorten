@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"html/template"
 	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 	"math/rand"
 	"time"
+	"strings"
 )
 
 type Url struct {
@@ -19,6 +21,7 @@ type Url struct {
 func main() {
 	http.HandleFunc("/", Homepage)
 	http.HandleFunc("/add", addLinkPage)
+	http.HandleFunc("/l/", redirectToUrl)
 	http.ListenAndServe(":8080", nil)
 }
 
@@ -109,3 +112,53 @@ func RandomString(strlen int) string {
 	}
 	return string(result)
 }
+
+func redirectToUrl(w http.ResponseWriter, r *http.Request) {
+	slug := strings.Replace(r.URL.Path, "/l/", "", -1)
+
+	session, err := mgo.Dial("mongodb://url:urldb@ds049925.mongolab.com:49925/urls")
+	if err != nil {
+		panic(err)
+	}
+
+	defer session.Close()
+
+	session.SetSafe(&mgo.Safe{})
+
+	Collection := session.DB("urls").C("urls")
+
+	result := Url{}
+
+	Collection.Find(bson.M{"slug": slug}).One(&result)
+
+	fmt.Println(slug)
+
+	if result.Url != "" {
+		http.Redirect(w, r, result.Url, 301)
+	} else {
+		errorPageTemplate.Execute(w, "URL not found!")
+	}
+}
+
+var errorPageTemplate = template.Must(template.New("redirectToUrl").Parse(errorPageContent))
+
+const errorPageContent = `
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Super Duper URL Shortener!</title>
+    <link href="http://getbootstrap.com/dist/css/bootstrap.min.css" rel="stylesheet">
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="col-md-4 col-md-offset-4">
+        <h4>{{html .}}</h4>
+      </div>
+    </div>
+  </body>
+</html>
+`
